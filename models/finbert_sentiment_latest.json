@@ -1,0 +1,13 @@
+{
+  "model_name": "finbert_sentiment",
+  "model_version": "1.0.0",
+  "created_at": "2025-10-10T19:06:07.963432",
+  "framework": "transformers",
+  "finbert_model": "ProsusAI/finbert",
+  "max_len": 128,
+  "batch_size": 16,
+  "learning_rate": 2e-05,
+  "device": "cuda",
+  "trained_at": "2025-10-10T19:06:11.808810",
+  "training_samples": 58
+}

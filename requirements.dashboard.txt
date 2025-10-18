@@ -1,0 +1,17 @@
+# Streamlit Dashboard
+streamlit==1.29.0
+plotly==5.18.0
+altair==4.2.2
+pandas==2.1.4
+numpy==1.26.2
+
+# Visualization (FIXED: Added missing dependencies)
+matplotlib==3.8.2
+seaborn==0.13.0
+
+# Utilities
+requests==2.32.5
+python-dotenv==1.0.0
+
+# Monitoring
+psutil==7.1.0

@@ -1,0 +1,238 @@
+# File: .github/workflows/production-deploy.yml
+"""
+🚀 Production Deployment Pipeline
+Automated testing, building, and deployment
+"""
+
+name: 🚀 Production Deployment
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: "3.9"
+  NODE_VERSION: "18"
+
+jobs:
+  # 🧪 Testing Job
+  test:
+    name: 🧪 Run Tests
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_pass
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+    - name: 📥 Checkout Code
+      uses: actions/checkout@v4
+    
+    - name: 🐍 Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+    
+    - name: 📦 Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-cov pytest-asyncio httpx
+    
+    - name: 🔧 Setup Environment
+      run: |
+        cp .env.example .env
+        echo "POSTGRES_HOST=localhost" >> .env
+        echo "REDIS_HOST=localhost" >> .env
+        echo "APP_ENV=testing" >> .env
+    
+    - name: 🧪 Run Unit Tests
+      run: |
+        pytest tests/ -v --cov=src --cov-report=xml --cov-report=html
+    
+    - name: 🔍 Run API Tests
+      run: |
+        python -m pytest tests/test_api.py -v
+    
+    - name: 📊 Upload Coverage
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+
+  # 🔒 Security Scan
+  security:
+    name: 🔒 Security Scan
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+    - name: 📥 Checkout Code
+      uses: actions/checkout@v4
+    
+    - name: 🛡️ Run Bandit Security Scan
+      run: |
+        pip install bandit
+        bandit -r src/ -f json -o bandit-report.json || true
+    
+    - name: 🔍 Run Safety Check
+      run: |
+        pip install safety
+        safety check --json --output safety-report.json || true
+    
+    - name: 📤 Upload Security Reports
+      uses: actions/upload-artifact@v3
+      with:
+        name: security-reports
+        path: |
+          bandit-report.json
+          safety-report.json
+
+  # 🐳 Build Docker Images
+  build:
+    name: 🐳 Build Images
+    runs-on: ubuntu-latest
+    needs: [test, security]
+    
+    steps:
+    - name: 📥 Checkout Code
+      uses: actions/checkout@v4
+    
+    - name: 🐳 Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: 🏗️ Build API Image
+      run: |
+        docker build -t crypto-sentiment-api:latest -f docker/Dockerfile.api .
+        docker save crypto-sentiment-api:latest > api-image.tar
+    
+    - name: 🏗️ Build Dashboard Image  
+      run: |
+        docker build -t crypto-sentiment-dashboard:latest -f docker/Dockerfile.dashboard .
+        docker save crypto-sentiment-dashboard:latest > dashboard-image.tar
+    
+    - name: 📤 Upload Images
+      uses: actions/upload-artifact@v3
+      with:
+        name: docker-images
+        path: |
+          api-image.tar
+          dashboard-image.tar
+
+  # 🚀 Deploy to Production
+  deploy:
+    name: 🚀 Deploy
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: 📥 Checkout Code
+      uses: actions/checkout@v4
+    
+    - name: 📥 Download Images
+      uses: actions/download-artifact@v3
+      with:
+        name: docker-images
+    
+    - name: 🐳 Load Images
+      run: |
+        docker load < api-image.tar
+        docker load < dashboard-image.tar
+    
+    - name: 🚀 Deploy with Docker Compose
+      run: |
+        # Copy production environment
+        cp .env.example .env
+        
+        # Start production stack
+        docker-compose -f docker-compose.prod.yml up -d
+        
+        # Wait for services
+        sleep 30
+        
+        # Health check
+        curl -f http://localhost:8000/api/v1/health/live || exit 1
+        
+        echo "🎉 Deployment successful!"
+    
+    - name: 📧 Notify Success
+      if: success()
+      run: |
+        echo "✅ Production deployment successful!"
+        echo "🔗 API: http://localhost:8000"
+        echo "📊 Dashboard: http://localhost:8501"
+        echo "📈 Monitoring: http://localhost:3000"
+
+  # 🤖 Model Retraining (Scheduled)
+  retrain:
+    name: 🤖 Automated Retraining
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    
+    steps:
+    - name: 📥 Checkout Code
+      uses: actions/checkout@v4
+    
+    - name: 🐍 Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: 📦 Install Dependencies
+      run: |
+        pip install -r requirements.txt
+    
+    - name: 🔄 Collect New Data
+      run: |
+        python scripts/collect_more_data.py
+    
+    - name: 🏷️ Auto-label Data
+      run: |
+        python scripts/auto_label_data.py \
+          --input_path data/raw/reddit_posts_$(date +%Y%m%d).csv \
+          --output_path data/processed/labeled_data_new.csv \
+          --filter_confidence
+    
+    - name: 🤖 Retrain Models
+      run: |
+        python scripts/train_production_model.py \
+          --data_path data/processed/labeled_data_new.csv \
+          --augment_data
+    
+    - name: ✅ Validate New Model
+      run: |
+        python scripts/validate_model.py \
+          --model_path models/lightgbm_production.pkl \
+          --min_accuracy 0.80
+    
+    - name: 📤 Deploy New Model
+      if: success()
+      run: |
+        echo "🎉 New model validated and ready for deployment!"

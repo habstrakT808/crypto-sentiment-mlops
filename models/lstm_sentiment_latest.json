@@ -1,0 +1,15 @@
+{
+  "model_name": "lstm_sentiment",
+  "model_version": "1.0.0",
+  "created_at": "2025-10-10T18:57:33.513168",
+  "framework": "pytorch",
+  "embedding_dim": 128,
+  "hidden_dim": 256,
+  "num_layers": 2,
+  "dropout": 0.5,
+  "max_vocab_size": 10000,
+  "device": "cuda",
+  "trained_at": "2025-10-10T18:57:34.624330",
+  "training_samples": 58,
+  "num_epochs": 5
+}
